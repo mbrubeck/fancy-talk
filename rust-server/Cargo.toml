@@ -1,0 +1,7 @@
+[package]
+name = "fancy-talk-server"
+version = "0.1.0"
+authors = ["Kai Blin <kai@samba.org>"]
+
+[dependencies]
+fancy-talk = { version = "0.1", path = "../proto" }

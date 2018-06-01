@@ -1,0 +1,8 @@
+[package]
+name = "fancy-talk"
+version = "0.1.0"
+authors = ["Kai Blin <kai@samba.org>"]
+
+[dependencies]
+byteorder = "1"
+error-chain = "0.11"
