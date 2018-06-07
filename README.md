@@ -19,7 +19,13 @@ A pure Rust implementation of the server, as proof of concept
 
 ### C-Server
 
-A C-based UDP server handing off the parsing to the Rust library
+A C-based UDP server handing off the parsing to the Rust library, managing allocated memory in Rust.
+
+
+## Talk
+
+Slides of the talk I gave at SambaXP 2018 can be found at https://kblin.org/talks/sambaxp/2018/rust_in_samba.html#1
+
 
 ## License
 
