@@ -3,6 +3,10 @@ name = "fancy-talk"
 version = "0.1.0"
 authors = ["Kai Blin <kai@samba.org>"]
 
+[lib]
+name = "fancy_talk"
+crate-type = ["dylib"]
+
 [dependencies]
 byteorder = "1"
 error-chain = "0.11"

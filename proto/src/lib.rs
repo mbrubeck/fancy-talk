@@ -1,4 +1,5 @@
 #![recursion_limit = "1024"]
+use std::slice;
 
 /// Parser library for the SambaXP 2018 demo protocol
 ///
@@ -91,10 +92,42 @@ impl Default for Package {
     }
 }
 
+
 impl Package {
     /// Create a new `Package`
     pub fn new() -> Self {
         Default::default()
+    }
+
+    pub fn from(c_pkg: &CPackage) -> Self {
+        let msg_type : MessageType = if c_pkg.message_type == 0 {
+            MessageType::Query
+        } else {
+            MessageType::Response
+        };
+        let mut query : Option<String> = None;
+        if c_pkg.query_len > 0 {
+            let query_str = unsafe {::std::str::from_utf8(slice::from_raw_parts(c_pkg.query, c_pkg.query_len)).unwrap()};
+            query = Some(String::from(query_str));
+        };
+        let mut payload : Option<String> = None;
+        if c_pkg.payload_len > 0 {
+            let payload_str = unsafe {::std::str::from_utf8(slice::from_raw_parts(c_pkg.payload, c_pkg.payload_len)).unwrap()};
+            payload = Some(String::from(payload_str));
+        };
+        Package {
+            id: c_pkg.id,
+            message_type: msg_type,
+            bold: c_pkg.bold,
+            italic: c_pkg.italic,
+            underlined: c_pkg.underlined,
+            blink: c_pkg.blink,
+            red: c_pkg.red,
+            green: c_pkg.green,
+            blue: c_pkg.blue,
+            query,
+            payload,
+        }
     }
 
     pub fn set_id(mut self, id: u16) -> Package {
@@ -131,13 +164,33 @@ impl Package {
         self
     }
 
-    pub fn set_query(mut self, query: Option<String>) -> Package {
-        self.query = query;
+    pub fn set_query(&mut self, query: Option<String>){
+        self.query = match query {
+            None => None,
+            Some(q) => Some(String::from(q.as_str()))
+        };
+    }
+
+    pub fn query_len(&self) -> usize {
+        match self.query {
+            None => 0,
+            Some(ref q) => q.as_bytes().len(),
+        }
+    }
+
+    pub fn set_payload(mut self, payload: Option<String>) -> Package {
+        self.payload = match payload {
+            None => None,
+            Some(q) => Some(String::from(q.as_str()))
+        };
         self
     }
-    pub fn set_payload(mut self, payload: Option<String>) -> Package {
-        self.payload = payload;
-        self
+
+    pub fn payload_len(&self) -> usize {
+        match self.payload {
+            None => 0,
+            Some(ref p) => p.as_bytes().len(),
+        }
     }
 }
 
@@ -224,8 +277,9 @@ impl Serialisable<Package> for Package {
                 encoder.write_u16(0)?;
             },
             Some(ref query) => {
-                encoder.write_u16(query.len() as u16)?;
-                encoder.write_slice(query.as_bytes())?;
+                let q_bytes = query.as_bytes();
+                encoder.write_u16(q_bytes.len() as u16)?;
+                encoder.write_slice(q_bytes)?;
             },
         }
 
@@ -234,8 +288,9 @@ impl Serialisable<Package> for Package {
                 encoder.write_u16(0)?;
             },
             Some(ref payload) => {
-                encoder.write_u16(payload.len() as u16)?;
-                encoder.write_slice(payload.as_bytes())?;
+                let p_bytes = payload.as_bytes();
+                encoder.write_u16(p_bytes.len() as u16)?;
+                encoder.write_slice(p_bytes)?;
             },
         }
 
@@ -243,6 +298,128 @@ impl Serialisable<Package> for Package {
     }
 }
 
+
+#[repr(C)]
+pub struct CPackage {
+    pub id: u16,
+    pub message_type: u8,
+    pub bold: bool,
+    pub italic: bool,
+    pub underlined: bool,
+    pub blink: bool,
+    pub red: u8,
+    pub green: u8,
+    pub blue: u8,
+    pub query_len: usize,
+    pub query: *mut u8,
+    pub payload_len: usize,
+    pub payload: *mut u8,
+}
+
+
+use std::ptr;
+
+impl From<Package> for CPackage {
+    fn from(pkg: Package) -> CPackage {
+        let msg_type : u8 = match pkg.message_type {
+            MessageType::Query => 0,
+            MessageType::Response => 1
+        };
+        let mut q_len : usize = 0;
+        let mut q_ptr : *mut u8 = ptr::null_mut();
+        match pkg.query {
+            None => {},
+            Some(q) => {
+                q_len = q.len();
+                q_ptr = Box::into_raw(q.into_boxed_str()) as *mut u8;
+            },
+        };
+        let mut p_len : usize = 0;
+        let mut p_ptr : *mut u8 = ptr::null_mut();
+        match pkg.payload {
+            None => {},
+            Some(p) => {
+                p_len = p.len();
+                p_ptr = Box::into_raw(p.into_boxed_str()) as *mut u8;
+            },
+        };
+        CPackage {
+            id: pkg.id,
+            message_type: msg_type,
+            bold: pkg.bold,
+            italic: pkg.italic,
+            underlined: pkg.underlined,
+            blink: pkg.blink,
+            red: pkg.red,
+            green: pkg.green,
+            blue: pkg.blue,
+            query_len: q_len,
+            query: q_ptr,
+            payload_len: p_len,
+            payload: p_ptr,
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn decode_package(buffer: *const u8, len: usize) -> *mut CPackage {
+    let buf : &[u8] = unsafe { slice::from_raw_parts(buffer, len) };
+    let mut decoder = Decoder::new(buf);
+    let pkg : CPackage = Package::read(&mut decoder).unwrap().into();
+    Box::into_raw(Box::new(pkg))
+}
+
+#[no_mangle]
+pub extern "C" fn encode_package(package: *const CPackage, buffer: *mut *mut u8, len: *mut usize) -> i32 {
+    if package.is_null() || len.is_null() {
+        return -1
+    }
+
+    let mut calculated_size : usize = 8;  // Size of the static fields
+    unsafe {
+        let pkg : &CPackage = &*package;
+        calculated_size += pkg.payload_len + pkg.query_len;
+    }
+
+    let mut buf : Vec<u8> = Vec::with_capacity(calculated_size);
+    unsafe {
+        let c_pkg : &CPackage = &*package;
+        let pkg = Package::from(c_pkg);
+        let mut encoder = Encoder::new(&mut buf);
+        let written = pkg.write(&mut encoder).unwrap_or(0_usize);
+        if written == 0 {
+            println!("Gah, wie died!");
+            return -1
+        }
+        *len = written;
+    }
+    unsafe {
+        let buf_box = buf.into_boxed_slice();
+        *buffer = Box::into_raw(buf_box) as *mut u8;
+    }
+    0
+}
+
+
+#[no_mangle]
+pub extern "C" fn free_package(package: *mut CPackage) {
+    if !package.is_null() {
+        unsafe {
+            let _pkg = Box::from_raw(package);
+            // and drop it
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn free_buffer(buffer: *mut u8) {
+    if !buffer.is_null() {
+        unsafe {
+            let _buf = Box::from_raw(buffer);
+            // and drop it
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {

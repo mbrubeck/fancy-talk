@@ -21,7 +21,7 @@ fn main() {
     let socket = UdpSocket::bind("127.0.0.1:65433").unwrap();
 
     let mut query = Package::new();
-    query.query = Some(config.query);
+    query.set_query(Some(config.query));
 
 
     let mut out_buf: Vec<u8> = Vec::new();
