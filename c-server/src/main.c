@@ -5,45 +5,29 @@
 #include <netinet/in.h>
 #include <string.h>
 #include <arpa/inet.h>
+#include <talloc.h>
 
 #include "fancy_talk.h"
 
 #define MAX_UDP_SIZE 4096
 
 
-Package *c_alloc_package(const char *query_str, const char *payload_str) {
+Package *c_alloc_package(TALLOC_CTX *mem_ctx, const char *query_str, const char *payload_str) {
     Package *pkg;
-    pkg = malloc(sizeof(Package));
-    memset(pkg, 0, sizeof(Package));
+    pkg = talloc_zero(mem_ctx, Package);
 
     if (query_str != NULL) {
         size_t len = strlen(query_str);
         pkg->query_len = len;
-        pkg->query = malloc(len);
-        strncpy(pkg->query, query_str, len);
+        pkg->query = talloc_strndup(pkg, query_str, len);
     }
 
     if (payload_str != NULL) {
         size_t len = strlen(payload_str);
         pkg->payload_len = len;
-        pkg->payload = malloc(len);
-        strncpy(pkg->payload, payload_str, len);
+        pkg->payload = talloc_strndup(pkg, payload_str, len);
     }
     return pkg;
-}
-
-
-void c_free_package(Package *pkg) {
-    if (pkg == NULL) {
-        return;
-    }
-    if (pkg->payload != NULL) {
-        free(pkg->payload);
-    }
-    if (pkg->query != NULL) {
-        free(pkg->query);
-    }
-    free(pkg);
 }
 
 
@@ -57,8 +41,11 @@ int main(const int argc, const char** argv) {
     size_t buflen;
     size_t clientlen;
     Package *query;
-    Package *response = c_alloc_package(NULL, "Not found!");
+    Package *response;
+    TALLOC_CTX *mem_ctx;
 
+    mem_ctx = talloc_new(NULL);
+    response = c_alloc_package(mem_ctx, NULL, "Not found!");
 
     response->message_type = RESPONSE;
     response->bold = true;
@@ -84,21 +71,21 @@ int main(const int argc, const char** argv) {
     clientlen = sizeof(client_addr);
 
     while(1) {
-        inbuf = malloc(MAX_UDP_SIZE);
+        inbuf = talloc_size(mem_ctx, MAX_UDP_SIZE);
         buflen = recvfrom(sockfd, inbuf, MAX_UDP_SIZE, 0, (struct sockaddr *)&client_addr, (unsigned int *)&clientlen);
         if (buflen == 0) {
-            free(inbuf);
+            talloc_free(inbuf);
             continue;
         }
 
         query = decode_package((uint8_t *)inbuf, buflen);
         if (query == NULL) {
-            free(inbuf);
+            talloc_free(inbuf);
             continue;
         }
 
         free_package(query);
-        free(inbuf);
+        talloc_free(inbuf);
 
         // TODO: look up messages
         encode_package(response, &outbuf, &buflen);
@@ -108,6 +95,6 @@ int main(const int argc, const char** argv) {
         free_buffer(outbuf);
 
     }
-    c_free_package(response);
+    talloc_free(response);
     return 0;
 }
