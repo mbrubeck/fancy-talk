@@ -9,3 +9,6 @@ run: target/c-fancy-server
 
 dbg: target/c-fancy-server
 	LD_LIBRARY_PATH=../proto/target/debug gdb ./target/c-fancy-server
+
+mem: target/c-fancy-server
+	LD_LIBRARY_PATH=../proto/target/debug valgrind -v --leak-check=full ./target/c-fancy-server
