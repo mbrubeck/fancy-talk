@@ -83,6 +83,19 @@ Package *lookup_message(const struct message_list *messages, const Package *quer
     return messages->message;
 }
 
+struct server_ctx {
+    Package *query;
+    uint8_t *buffer;
+};
+
+int free_server_ctx(struct server_ctx *srv) {
+    if (srv->query) {
+        free_package(srv->query);
+    }
+    if (srv->buffer) {
+        free_buffer(srv->buffer);
+    }
+};
 
 int main(const int argc, const char** argv) {
     int sockfd;
@@ -96,8 +109,8 @@ int main(const int argc, const char** argv) {
     struct message_list *messages;
     Package *query;
     Package *response;
+    struct server_ctx *srv_ctx;
     TALLOC_CTX *mem_ctx;
-    TALLOC_CTX *tmp_ctx;
 
     mem_ctx = talloc_new(NULL);
     messages = create_messages(mem_ctx);
@@ -121,27 +134,27 @@ int main(const int argc, const char** argv) {
     clientlen = sizeof(client_addr);
 
     while(1) {
-        tmp_ctx = talloc_new(mem_ctx);
-        inbuf = talloc_size(tmp_ctx, MAX_UDP_SIZE);
+        srv_ctx = talloc_zero(mem_ctx, struct server_ctx);
+        talloc_set_destructor(srv_ctx, free_server_ctx);
+        inbuf = talloc_size(srv_ctx, MAX_UDP_SIZE);
         buflen = recvfrom(sockfd, inbuf, MAX_UDP_SIZE, 0, (struct sockaddr *)&client_addr, (unsigned int *)&clientlen);
         if (buflen == 0) {
             goto done;
         }
 
-        query = decode_package((uint8_t *)inbuf, buflen);
-        if (query == NULL) {
+        srv_ctx->query = decode_package((uint8_t *)inbuf, buflen);
+        if (srv_ctx->query == NULL) {
             goto done;
         }
 
-        response = lookup_message(messages, query);
+        response = lookup_message(messages, srv_ctx->query);
 
-        encode_package(response, &outbuf, &buflen);
+        encode_package(response, &srv_ctx->buffer, &buflen);
 
-        buflen = sendto(sockfd, outbuf, buflen, 0, (struct sockaddr *)&client_addr, clientlen);
+        buflen = sendto(sockfd, srv_ctx->buffer, buflen, 0, (struct sockaddr *)&client_addr, clientlen);
+
 done:
-        talloc_free(tmp_ctx);
-        free_package(query);
-        free_buffer(outbuf);
+        talloc_free(srv_ctx);
     }
     talloc_free(mem_ctx);
     return 0;
