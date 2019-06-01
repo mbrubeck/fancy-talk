@@ -12,7 +12,10 @@
 #define MAX_UDP_SIZE 4096
 
 
-Package *c_alloc_package(TALLOC_CTX *mem_ctx, const char *query_str, const char *payload_str) {
+Package *c_alloc_package(TALLOC_CTX *mem_ctx,
+                         const char *query_str,
+                         const char *payload_str,
+                         int red, int green, int blue) {
     Package *pkg;
     pkg = talloc_zero(mem_ctx, Package);
 
@@ -27,7 +30,57 @@ Package *c_alloc_package(TALLOC_CTX *mem_ctx, const char *query_str, const char 
         pkg->payload_len = len;
         pkg->payload = talloc_strndup(pkg, payload_str, len);
     }
+
+    pkg->message_type = RESPONSE;
+    pkg->red = red;
+    pkg->green = green;
+    pkg->blue = blue;
     return pkg;
+}
+
+
+struct message_list *create_messages(TALLOC_CTX *mem_ctx) {
+    struct message_list *fallback;
+    struct message_list *greeting;
+    struct message_list *hamlet;
+    struct message_list *farewell;
+
+    fallback = talloc_zero(mem_ctx, struct message_list);
+    fallback->message = c_alloc_package(fallback, "fallback", "Not found!", 0xff, 0x00, 0x00);
+    fallback->message->bold = true;
+    fallback->message->blink = true;
+
+    greeting = talloc_zero(mem_ctx, struct message_list);
+    greeting->message = c_alloc_package(greeting, "greeting", "Hello, world!", 0xee, 0x66, 0x22);
+    greeting->message->italic = true;
+
+    hamlet = talloc_zero(mem_ctx, struct message_list);
+    hamlet->message = c_alloc_package(hamlet, "hamlet", "Alas, poor Yorrick!", 0x00, 0x66, 0x66);
+    hamlet->message->underlined = true;
+
+    farewell = talloc_zero(mem_ctx, struct message_list);
+    farewell->message = c_alloc_package(farewell, "farewell", "Time to sahay goooooodbyeeeeeee!!!!", 0x00, 0x22, 0x66);
+    farewell->message->bold = true;
+
+    fallback->next = greeting;
+    greeting->next = hamlet;
+    hamlet->next = farewell;
+
+    return fallback;
+}
+
+
+Package *lookup_message(const struct message_list *messages, const Package *query) {
+    const struct message_list *curr = messages;
+    while(curr) {
+        if (strcmp(query->query, curr->message->query) == 0) {
+            return curr->message;
+        }
+        curr = curr->next;
+    }
+
+    // Use fallback
+    return messages->message;
 }
 
 
@@ -40,17 +93,14 @@ int main(const int argc, const char** argv) {
     uint8_t *outbuf;
     size_t buflen;
     size_t clientlen;
+    struct message_list *messages;
     Package *query;
     Package *response;
     TALLOC_CTX *mem_ctx;
+    TALLOC_CTX *tmp_ctx;
 
     mem_ctx = talloc_new(NULL);
-    response = c_alloc_package(mem_ctx, NULL, "Not found!");
-
-    response->message_type = RESPONSE;
-    response->bold = true;
-    response->blink = true;
-    response->red = 0xff;
+    messages = create_messages(mem_ctx);
 
     sockfd = socket(AF_INET, SOCK_DGRAM, 0);
     if (sockfd < 0) {
@@ -71,30 +121,28 @@ int main(const int argc, const char** argv) {
     clientlen = sizeof(client_addr);
 
     while(1) {
-        inbuf = talloc_size(mem_ctx, MAX_UDP_SIZE);
+        tmp_ctx = talloc_new(mem_ctx);
+        inbuf = talloc_size(tmp_ctx, MAX_UDP_SIZE);
         buflen = recvfrom(sockfd, inbuf, MAX_UDP_SIZE, 0, (struct sockaddr *)&client_addr, (unsigned int *)&clientlen);
         if (buflen == 0) {
-            talloc_free(inbuf);
-            continue;
+            goto done;
         }
 
         query = decode_package((uint8_t *)inbuf, buflen);
         if (query == NULL) {
-            talloc_free(inbuf);
-            continue;
+            goto done;
         }
 
-        free_package(query);
-        talloc_free(inbuf);
+        response = lookup_message(messages, query);
 
-        // TODO: look up messages
         encode_package(response, &outbuf, &buflen);
 
-
         buflen = sendto(sockfd, outbuf, buflen, 0, (struct sockaddr *)&client_addr, clientlen);
+done:
+        talloc_free(tmp_ctx);
+        free_package(query);
         free_buffer(outbuf);
-
     }
-    talloc_free(response);
+    talloc_free(mem_ctx);
     return 0;
 }

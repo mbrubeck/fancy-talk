@@ -9,4 +9,9 @@
 #define QUERY 0
 #define RESPONSE 1
 
+struct message_list {
+    struct message_list *next;
+    Package *message;
+};
+
 #endif // _FANCY_TALK_H_
