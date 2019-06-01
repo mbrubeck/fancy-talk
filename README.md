@@ -26,6 +26,8 @@ A C-based UDP server handing off the parsing to the Rust library, managing alloc
 
 Slides of the talk I gave at SambaXP 2018 can be found at https://kblin.org/talks/sambaxp/2018/rust_in_samba.html#1
 
+Slides for the follow-up talk from SambaXP 2019 will be up soon.
+
 
 ## License
 
