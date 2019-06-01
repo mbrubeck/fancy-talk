@@ -44,6 +44,7 @@ struct message_list *create_messages(TALLOC_CTX *mem_ctx) {
     struct message_list *greeting;
     struct message_list *hamlet;
     struct message_list *farewell;
+    struct message_list *exit;
 
     fallback = talloc_zero(mem_ctx, struct message_list);
     fallback->message = c_alloc_package(fallback, "fallback", "Not found!", 0xff, 0x00, 0x00);
@@ -62,9 +63,15 @@ struct message_list *create_messages(TALLOC_CTX *mem_ctx) {
     farewell->message = c_alloc_package(farewell, "farewell", "Time to sahay goooooodbyeeeeeee!!!!", 0x00, 0x22, 0x66);
     farewell->message->bold = true;
 
+    exit = talloc_zero(mem_ctx, struct message_list);
+    exit->message = c_alloc_package(exit, "exit", "Bye, bye.", 0x00, 0xcc, 0x00);
+    exit->message->bold = true;
+    exit->message->italic = true;
+
     fallback->next = greeting;
     greeting->next = hamlet;
     hamlet->next = farewell;
+    farewell->next = exit;
 
     return fallback;
 }
@@ -152,6 +159,9 @@ int main(const int argc, const char** argv) {
         encode_package(response, &srv_ctx->buffer, &buflen);
 
         buflen = sendto(sockfd, srv_ctx->buffer, buflen, 0, (struct sockaddr *)&client_addr, clientlen);
+        if (strncmp("exit", srv_ctx->query->query, srv_ctx->query->query_len) == 0) {
+            break;
+        }
 
 done:
         talloc_free(srv_ctx);

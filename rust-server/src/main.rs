@@ -40,12 +40,16 @@ fn main() {
     let fallback = Package::new().set_bold(true).set_blink(true).set_rgb(0xff, 0x00, 0x00)
                                  .set_message_type(MessageType::Response)
                                  .set_payload(Some(String::from("Not found!")));
+    let exit = Package::new().set_bold(true).set_italic(true).set_rgb(0x00, 0xcc, 0x00)
+                                 .set_message_type(MessageType::Response)
+                                 .set_payload(Some(String::from("Bye, bye.")));
 
     let mut messages = HashMap::new();
     messages.insert("greeting", greeting);
     messages.insert("hamlet", hamlet);
     messages.insert("farewell", farewell);
     messages.insert("fallback", fallback);
+    messages.insert("exit", exit);
 
     loop {
         let mut buf : [u8; MAX_UDP_SIZE] = [0; MAX_UDP_SIZE];
@@ -64,5 +68,11 @@ fn main() {
         }
 
         socket.send_to(outbuf.as_slice(), &src).expect("Sending reply failed");
+
+        if let Some(q) = query.query {
+            if q == "exit" {
+                break;
+            }
+        }
     }
 }
