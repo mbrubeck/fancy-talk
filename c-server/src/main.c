@@ -73,7 +73,7 @@ struct message_list *create_messages(TALLOC_CTX *mem_ctx) {
 Package *lookup_message(const struct message_list *messages, const Package *query) {
     const struct message_list *curr = messages;
     while(curr) {
-        if (strcmp(query->query, curr->message->query) == 0) {
+        if (strncmp(query->query, curr->message->query, query->query_len) == 0) {
             return curr->message;
         }
         curr = curr->next;
