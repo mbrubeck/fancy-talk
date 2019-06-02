@@ -413,12 +413,10 @@ pub extern "C" fn free_package(package: *mut CPackage) {
 }
 
 #[no_mangle]
-pub extern "C" fn free_buffer(buffer: *mut u8) {
+pub unsafe extern "C" fn free_buffer(buffer: *mut u8, len: usize) {
     if !buffer.is_null() {
-        unsafe {
-            let _buf = Box::from_raw(buffer);
-            // and drop it
-        }
+        let _buf = Box::from_raw(slice::from_raw_parts_mut(buffer, len));
+        // and drop it
     }
 }
 
