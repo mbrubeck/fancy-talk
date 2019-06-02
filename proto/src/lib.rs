@@ -405,7 +405,8 @@ pub extern "C" fn encode_package(package: *const CPackage, buffer: *mut *mut u8,
 pub extern "C" fn free_package(package: *mut CPackage) {
     if !package.is_null() {
         unsafe {
-            let _pkg = Box::from_raw(package);
+            let c_pkg = Box::from_raw(package);
+            let _pkg = Package::from(&c_pkg);
             // and drop it
         }
     }
